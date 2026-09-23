@@ -1,0 +1,13 @@
+# Backend runtime (built binary at repo root). Root-anchored so that
+# cmd/server-health and internal/... are never ignored.
+/server-health
+
+web/node_modules/
+
+# Vite build output, except the placeholder that keeps go:embed compiling
+web/dist/*
+!web/dist/.gitkeep
+
+# Editor / OS
+.DS_Store
+.idea/

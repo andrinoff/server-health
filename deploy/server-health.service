@@ -1,0 +1,26 @@
+[Unit]
+Description=Server health dashboard
+Documentation=file:/opt/server-health/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=server-health
+Group=server-health
+WorkingDirectory=/opt/server-health
+# Loopback only: a private network (Tailscale) or a local reverse proxy fronts it.
+ExecStart=/opt/server-health/server-health -addr 127.0.0.1:8080 -services server-health
+Restart=always
+RestartSec=3
+
+# Hardening. None of this blocks reading /proc or talking to systemd over
+# D-Bus, which is how the dashboard does its job.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
