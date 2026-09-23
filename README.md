@@ -122,22 +122,25 @@ sudo tailscale serve --bg 127.0.0.1:8080
 # then open https://<server>.<tailnet>.ts.net from any device in your tailnet
 ```
 
-To use your own domain while staying off the public internet, point an A record
-at the server's private (Tailscale) IP with the proxy off, give Caddy a DNS-01
-certificate and reverse-proxy to the address from the install step:
-
-```
-server.andrinoff.com {
-	tls {
-		dns cloudflare {env.CF_DNS_API_TOKEN}   # or an inline token, as in your Caddyfile
-	}
-	reverse_proxy 127.0.0.1:8080
-}
-```
+To use your own domain while staying off the public internet:
 
 ```bash
-sudo systemctl reload caddy     # the DNS record must resolve inside the tailnet
+sudo ./deploy/setup-domain.sh server.andrinoff.com
 ```
+
+The script adds one site block to `/etc/caddy/Caddyfile` and leaves any site
+already there alone, reuses the Cloudflare token it finds in that file, then
+validates and reloads Caddy. Point it at the port you installed with:
+
+```bash
+sudo SERVER_HEALTH_ADDR=127.0.0.1:8081 ./deploy/setup-domain.sh server.andrinoff.com
+```
+
+For the certificate to issue, the A record must name this server's Tailscale IP
+with the proxy off; the script compares the two and warns if they differ. With
+no token available it falls back to Caddy's local CA, which each device has to
+trust once. Re-running it replaces its own block rather than stacking a second
+one.
 
 ## Develop
 

@@ -8,6 +8,9 @@ web/node_modules/
 web/dist/*
 !web/dist/.gitkeep
 
+# Prebuilt Caddy binaries, if you drop them next to this repo
+deploy/dist/
+
 # Editor / OS
 .DS_Store
 .idea/
