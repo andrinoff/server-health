@@ -53,25 +53,27 @@ make build
 
 ## Install on Ubuntu
 
+Name the units you want on the page; they go into the service's `-services`
+flag:
+
 ```bash
 make build
-sudo ./deploy/install.sh
+sudo ./deploy/install.sh home.service caddy.service
 ```
 
-That creates a `server-health` system user, installs the binary to
-`/opt/server-health`, installs and starts a systemd unit. Then:
+The installer listens on `127.0.0.1:8080` unless you say otherwise. If
+something else already holds that port (another dashboard, for instance):
 
 ```bash
-systemctl status server-health --no-pager
-journalctl -u server-health -e --no-pager
+sudo SERVER_HEALTH_ADDR=127.0.0.1:8081 ./deploy/install.sh home.service caddy.service
 ```
 
-Upgrading is `make build && sudo ./deploy/install.sh` again.
+Whatever you choose, that is the address your reverse proxy should point at.
 
-### Choosing the units
-
-Edit `ExecStart` in `/etc/systemd/system/server-health.service` so the
-`-services` flag lists what you want to watch, then:
+That creates a `server-health` system user, installs the binary to
+`/opt/server-health`, writes and starts the systemd unit, and prints the units
+it is watching. To change them later, edit `ExecStart` in
+`/etc/systemd/system/server-health.service` and run:
 
 ```bash
 sudo systemctl daemon-reload && sudo systemctl restart server-health
@@ -81,6 +83,8 @@ Only the units on that list are shown, and only they can ever be controlled: a
 unit name that is not on the list is rejected before anything reaches systemd.
 A unit that does not exist still appears, marked as not installed, which is
 the useful answer when a service fails to come back.
+
+Upgrading is `make build && sudo ./deploy/install.sh <same units>` again.
 
 ### Allowing the buttons
 
@@ -118,14 +122,21 @@ sudo tailscale serve --bg 127.0.0.1:8080
 # then open https://<server>.<tailnet>.ts.net from any device in your tailnet
 ```
 
-To use your own domain while staying off the public internet, run Caddy on the
-server with a DNS-01 certificate and point an A record at the Tailscale IP
-with the proxy off. Caddy only needs:
+To use your own domain while staying off the public internet, point an A record
+at the server's private (Tailscale) IP with the proxy off, give Caddy a DNS-01
+certificate and reverse-proxy to the address from the install step:
 
 ```
 server.andrinoff.com {
+	tls {
+		dns cloudflare {env.CF_DNS_API_TOKEN}   # or an inline token, as in your Caddyfile
+	}
 	reverse_proxy 127.0.0.1:8080
 }
+```
+
+```bash
+sudo systemctl reload caddy     # the DNS record must resolve inside the tailnet
 ```
 
 ## Develop

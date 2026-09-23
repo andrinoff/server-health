@@ -8,6 +8,11 @@ BIN_DIR="/opt/server-health"
 USER="server-health"
 SERVICE="server-health.service"
 
+# Port to listen on. 8080 is often taken (by another app on the same box), so
+# override it with: sudo SERVER_HEALTH_ADDR=127.0.0.1:8081 ./deploy/install.sh ...
+ADDR="${SERVER_HEALTH_ADDR:-127.0.0.1:8080}"
+PORT="${ADDR##*:}"
+
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ $EUID -ne 0 ]]; then
@@ -20,6 +25,17 @@ if [[ ! -f "$REPO_DIR/$BIN" ]]; then
   exit 1
 fi
 
+# Units to watch and control, e.g. ./deploy/install.sh home.service caddy.service
+services=""
+for arg in "$@"; do
+  unit="${arg%.service}.service"
+  if [[ ! "$unit" =~ ^[A-Za-z0-9@:._-]+\.service$ ]]; then
+    echo "error: '$arg' is not a valid unit name" >&2
+    exit 1
+  fi
+  services="${services:+$services,}$unit"
+done
+
 echo "==> Creating service user"
 if ! id -u "$USER" >/dev/null 2>&1; then
   useradd --system --home-dir "$BIN_DIR" --shell /usr/sbin/nologin "$USER"
@@ -31,14 +47,18 @@ install -m 0755 "$REPO_DIR/$BIN" "$BIN_DIR/$BIN"
 
 echo "==> Installing systemd unit"
 install -m 0644 "$REPO_DIR/deploy/$SERVICE" "/etc/systemd/system/$SERVICE"
+sed -i "s|-addr [^ ]*|-addr $ADDR|" "/etc/systemd/system/$SERVICE"
+if [[ -n "$services" ]]; then
+  sed -i "s|-services [^ ]*|-services $services|" "/etc/systemd/system/$SERVICE"
+fi
 systemctl daemon-reload
 
 echo "==> Starting service"
 systemctl enable --now "$SERVICE"
 sleep 1
 
-if curl -fsS http://127.0.0.1:8080/api/health >/dev/null 2>&1; then
-  echo "OK: the dashboard is up at http://127.0.0.1:8080"
+if curl -fsS "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
+  echo "OK: the dashboard is up on $ADDR"
 else
   echo "Started, but the health check failed. Check:"
   echo "  systemctl status $SERVICE --no-pager"
@@ -46,7 +66,14 @@ else
 fi
 
 echo
-echo "Next steps:"
-echo "  1. Choose the units it shows:  edit ExecStart in /etc/systemd/system/$SERVICE"
-echo "  2. Allow the buttons:          sudo ./deploy/service-control.sh <unit> [unit...]"
-echo "  3. Reach it privately:         sudo tailscale serve --bg 127.0.0.1:8080"
+echo "Running: $(grep -m1 '^ExecStart=' "/etc/systemd/system/$SERVICE" | cut -d= -f2-)"
+echo
+if [[ -n "$services" ]]; then
+  echo "Watching: $services"
+else
+  echo "Next: choose the units to watch by editing ExecStart in /etc/systemd/system/$SERVICE, then:"
+  echo "  sudo systemctl daemon-reload && sudo systemctl restart $SERVICE"
+fi
+echo
+echo "Allow the start/stop/restart buttons (same units as above):"
+echo "  sudo ./deploy/service-control.sh $services"
